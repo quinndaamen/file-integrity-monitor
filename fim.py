@@ -10,6 +10,7 @@ app = typer.Typer()
 MONITOR_FOLDER = r"C:\Users\Quinn\Documents\desk\Coding\Portfolio\FIM\tests\watched"
 HASH_FILE = "file_hashes.json"
 CYCLE = 10 
+LOG_FILE = "logs.json1"
 
 def calculate_hash(filepath):
     sha256 = hashlib.sha256()
@@ -40,25 +41,47 @@ def load_baseline(filepath):
     with open(filepath, "r", encoding="utf-8") as file:
         return json.load(file)
 
+def get_timestamp():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+   
 
 def compare_hashes(baseline, current):
-    
+    events = []
+
     for filepath, filehash in current.items():
-        
-        if filepath not in baseline:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [NEW FILE] {filepath}")
+        if filepath not in baseline:          
+            events.append({
+                "timestamp": get_timestamp(),
+                "event": "NEW",
+                "filepath": filepath,
+                "hash": filehash
+            })
 
         elif baseline[filepath] != filehash:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [MODIFIED] {filepath}")
+            events.append({
+            "timestamp": get_timestamp(),
+            "event": "MODIFIED",
+            "filepath": filepath,
+            "hash": filehash
+        })
 
     for filepath in baseline:
 
         if filepath not in current:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [DELETED] {filepath}")
-  
+            events.append({
+            "timestamp": get_timestamp(),
+            "event": "DELETED",
+            "filepath": filepath,
+            "hash": None
+        })
+    return events
+
+
+def log_events(events):
+    with open(LOG_FILE, "a", encoding="utf-8") as file:
+        for event in events:
+            file.write(json.dumps(event) + "\n")
+
 
 @app.command()
 def init():
@@ -67,13 +90,16 @@ def init():
     typer.echo(f"{len(hashes)} files are saved to: {HASH_FILE}")
 
 
+
 @app.command()
 def scan():
-        baseline = load_baseline(HASH_FILE)
-        current = scan_folder(MONITOR_FOLDER)
-        
+    baseline = load_baseline(HASH_FILE)
+    current = scan_folder(MONITOR_FOLDER)
+    events = compare_hashes(baseline, current)
 
-        compare_hashes(baseline, current)
+    print("Events:", events)
+
+    log_events(events)
 
 @app.command()
 def monitor():
@@ -81,11 +107,9 @@ def monitor():
 
     while True:
         current = scan_folder(MONITOR_FOLDER)
-
-        compare_hashes(baseline, current)
-
+        events = compare_hashes(baseline, current)
+        log_events(events)
         baseline = current
-
         time.sleep(CYCLE)
 
 
